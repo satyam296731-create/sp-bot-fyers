@@ -1,25 +1,4 @@
 import os
-import subprocess
-import streamlit as st
-
-# @st.cache_resource ye ensure karega ki background process sirf 1 baar start ho,
-# har baar page refresh hone par baar-baar duplicate na chale.
-@st.cache_resource
-def start_background_screener():
-    # 1. Pehle check karega ki token file hai ya nahi
-    if not os.path.exists("fyers_token.txt"):
-        st.write("🔑 Generating fresh Fyers Access Token...")
-        subprocess.run(["python", "fyers_login.py"])
-    
-    # 2. Screener file ko background process me start kar dega
-    st.write("🚀 Starting SP Screener in background...")
-    process = subprocess.Popen(["python", "sp_screener.py"])
-    return process
-
-# Server start hote hi screener chalu ho jayega
-
-start_background_screener()
-import os
 import sys
 import time
 import subprocess
@@ -129,4 +108,3 @@ else:
 
 time.sleep(0.5)    
 st.rerun()
-##   python web_app.py   for run the code in terminal
