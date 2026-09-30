@@ -1,3 +1,36 @@
+import streamlit as st
+import pandas as pd
+import os
+import subprocess
+
+st.set_page_config(page_title="SP BOT Live Dashboard", layout="wide")
+
+# Background me screener run karne wala function
+@st.cache_resource
+def start_screener_process():
+    if not os.path.exists("fyers_token.txt"):
+        subprocess.run(["python", "fyers_login.py"])
+    return subprocess.Popen(["python", "sp_screener.py"])
+
+start_screener_process()
+
+st.title("🚀 SP BOT Real-Time Dashboard")
+
+# ⚡ LIVE FRAGMENT: Ye function har 1 second me bina page refresh kiye update hoga
+@st.fragment(run_every="1s")
+def display_live_tables():
+    if os.path.exists("LIVE_DATA.csv"):
+        # Live CSV file read karo
+        df = pd.read_csv("LIVE_DATA.csv")
+        
+        # Streamlit container me live table render karo
+        st.dataframe(df, use_container_width=True, height=400)
+    else:
+        st.warning("Waiting for live market data stream...")
+
+# Fragment call karo
+display_live_tables()
+
 import os
 import sys
 import time
