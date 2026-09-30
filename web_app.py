@@ -6,15 +6,29 @@ import pandas as pd
 import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
+# Script auto-run handler
 if not get_script_run_ctx():
     subprocess.run([sys.executable, "-m", "streamlit", "run", __file__])
     sys.exit()
 
+# Page Config
 st.set_page_config(page_title="SP BOT PRO", layout="wide", initial_sidebar_state="collapsed")
 
+# 🌟 NAYA CSS: Left-Right se width kam karne ke liye
 st.markdown("""
     <style>
-    .stDataFrame {font-size: 14px;}
+    /* Main container ko 80% width dekar center kiya hai */
+    .block-container { 
+        padding-top: 1rem; 
+        padding-bottom: 0rem; 
+        max-width: 85%;  /* <--- Isko 70% ya 90% karke width adjust kar sakte ho */
+        margin: 0 auto; 
+    }
+    
+    h3 { padding-top: 0.5rem; margin-bottom: -1rem; font-size: 1.3rem; }
+    h5 { padding-top: 0.5rem; margin-bottom: -0.5rem; font-size: 1rem; }
+    .stDataFrame {font-size: 13px;}
+    hr { margin-top: 0.5rem; margin-bottom: 0.5rem; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -36,6 +50,9 @@ def style_dataframe(val, col_name):
         elif col_name == 'Signal':
             if 'BUY' in str(val): return 'color: #00ff00; font-weight: bold;' 
             elif 'SELL' in str(val): return 'color: #ff4b4b; font-weight: bold;' 
+        elif col_name == 'Breakout':
+            if 'UP' in str(val): return 'color: #00ff00; font-weight: bold;'
+            elif 'DOWN' in str(val): return 'color: #ff4b4b; font-weight: bold;'
     except: pass
     return ''
 
@@ -51,8 +68,10 @@ def render_table(df_subset):
     if 'Current_PL' in df_subset.columns: styler = styler.map(lambda x: style_dataframe(x, 'Current_PL'), subset=['Current_PL'])
     if 'Signal_Gap' in df_subset.columns: styler = styler.map(lambda x: style_dataframe(x, 'Signal_Gap'), subset=['Signal_Gap'])
     if 'Signal' in df_subset.columns: styler = styler.map(lambda x: style_dataframe(x, 'Signal'), subset=['Signal'])
+    if 'Breakout' in df_subset.columns: styler = styler.map(lambda x: style_dataframe(x, 'Breakout'), subset=['Breakout'])
     
-    st.dataframe(styler, use_container_width=True, hide_index=True)
+    box_height = min(len(df_subset) * 36 + 43, 320)
+    st.dataframe(styler, width="stretch", hide_index=True, height=box_height)
 
 @st.cache_data(ttl=1)
 def load_data():
@@ -68,21 +87,24 @@ if df is not None and not df.empty:
         display_df = df[df['Category'] == cat].drop(columns=['Category'])
         if str(cat).startswith("OPT_"):
             clean_title = str(cat).replace("OPT_", "")
-            st.subheader(f"📊 {clean_title} OPTIONS")
+            st.markdown(f"### 📊 {clean_title} OPTIONS")
+            
             call_df = display_df[display_df['Type'].astype(str).str.contains('CALL', na=False)]
             put_df = display_df[display_df['Type'].astype(str).str.contains('PUT', na=False)]
+            
             if not call_df.empty:
-                st.markdown(f"##### 🟢 {clean_title} — CALL OPTIONS")
+                st.markdown(f"##### 🟢 CALL OPTIONS")
                 render_table(call_df)
             if not put_df.empty:
-                st.markdown(f"##### 🔴 {clean_title} — PUT OPTIONS")
+                st.markdown(f"##### 🔴 PUT OPTIONS")
                 render_table(put_df)
             st.write("---")
         else:
-            st.subheader(f"📊 {cat}")
+            st.markdown(f"### 📊 {cat}")
             render_table(display_df)
+            st.write("---")
 else:
     st.info("🔄 Live data loading...")
 
-time.sleep(0.5)
+time.sleep(0.5)    
 st.rerun()

@@ -1,0 +1,7 @@
+streamlit
+pandas
+numpy
+fyers_apiv3
+websocket-client
+requests
+yfinance
