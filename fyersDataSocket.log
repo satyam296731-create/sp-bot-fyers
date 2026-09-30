@@ -23,3 +23,5 @@
 {"level":"INFO","location":"[__symbol_conversion:1358] data_ws","message":"Successfully loaded index_hsm_mapping from public API","timestamp":"2026-09-30 12:02:25,501+0530","service":"FyersDataSocket"}
 {"level":"INFO","location":"[__symbol_conversion:1358] data_ws","message":"Successfully loaded index_hsm_mapping from public API","timestamp":"2026-09-30 12:06:44,532+0530","service":"FyersDataSocket"}
 {"level":"INFO","location":"[__symbol_conversion:1358] data_ws","message":"Successfully loaded index_hsm_mapping from public API","timestamp":"2026-09-30 12:16:59,263+0530","service":"FyersDataSocket"}
+{"level":"INFO","location":"[__symbol_conversion:1358] data_ws","message":"Successfully loaded index_hsm_mapping from public API","timestamp":"2026-09-30 14:06:57,826+0530","service":"FyersDataSocket"}
+{"level":"INFO","location":"[__symbol_conversion:1358] data_ws","message":"Successfully loaded index_hsm_mapping from public API","timestamp":"2026-09-30 14:39:39,427+0530","service":"FyersDataSocket"}
