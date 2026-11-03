@@ -12,7 +12,7 @@ secret_key = "9IIP7EZUO1"
 redirect_uri = "https://fyers.in"
 
 fyers_id = "XS79089"                    
-fyers_pin = "1819"                        
+fyers_pin = "3681"                        
 totp_secret = "QSXXHTM7SPFPMMPCN2SHB6E3G22GUWSN" 
 # =========================================================================
 
@@ -55,8 +55,7 @@ def auto_login_fyers():
         auth_headers = {"Authorization": f"Bearer {sso_token}", "Content-Type": "application/json"}
         app_id_clean = client_id[:-4] 
         
-        data_auth = {
-            "fyers_id": fyers_id,
+        data_auth = { "fyers_id": fyers_id,
             "app_id": app_id_clean,
             "redirect_uri": redirect_uri,
             "appType": "100",
@@ -65,10 +64,8 @@ def auto_login_fyers():
             "scope": "",
             "nonce": "",
             "response_type": "code",
-            "create_cookie": True
-        }
+            "create_cookie": True }
         res_auth = requests.post("https://api-t1.fyers.in/api/v3/token", json=data_auth, headers=auth_headers).json()
-        
         if res_auth.get("s") != "ok":
             print("Auth Error:", res_auth)
             return
@@ -77,13 +74,11 @@ def auto_login_fyers():
         auth_code = urllib.parse.parse_qs(parsed.query)["auth_code"][0]
         
         # --- STEP 5: Final Token ---
-        session = fyersModel.SessionModel(
-            client_id=client_id,
+        session = fyersModel.SessionModel( client_id=client_id,
             secret_key=secret_key,
             redirect_uri=redirect_uri,
             response_type="code",
-            grant_type="authorization_code"
-        )
+            grant_type="authorization_code" )
         session.set_token(auth_code)
         response = session.generate_token()
         
@@ -92,8 +87,7 @@ def auto_login_fyers():
                 f.write(response["access_token"])
             print("Login Successful. Token 'fyers_token.txt' me save ho gaya hai.")
         else:
-            print("Failed to get access token:", response)
-            
+            print("Failed to get access token:", response)         
     except Exception as e:
         print("Login me koi problem aayi:", e)
 

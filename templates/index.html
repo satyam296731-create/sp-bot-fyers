@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SP BOT PRO — Signalist Live Trading Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; background: #0b0f19; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0b0f19; }
+        ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #374151; }
+        #chart-grid { flex: 1; display: grid; gap: 6px; padding: 6px; background: #060911; min-height: 0; height: 100%; width: 100%; }
+        .layout-1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+        .layout-2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+        .layout-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .layout-6 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .layout-8 { grid-template-columns: 1fr 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .pane { background: #111827; border: 1px solid #1f2937; border-radius: 8px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        .pane.active-pane { border-color: #eab308; }
+        .pane.active-pane .pane-badge { background: #eab308; color: #030712; }
+        .pane.maximized-pane { position: fixed !important; inset: 54px 6px 6px 6px !important; z-index: 40 !important; }
+        .pane-header { padding: 5px 8px; background: #161f30; display: flex; gap: 5px; align-items: center; font-size: 11px; border-bottom: 1px solid #1f2937; flex-shrink: 0; z-index: 10; }
+        .pane-header input, .pane-header select { background: #0b0f19; color: #fff; border: 1px solid #374151; padding: 3px 6px; border-radius: 5px; font-size: 11px; outline: none; text-transform: uppercase; }
+        .pane-header input { width: 132px; font-weight: 700; }
+        .pane-header input:focus, .pane-header select:focus { border-color: #eab308; }
+        .price-time-box { display: flex; flex-direction: column; align-items: flex-end; margin-left: auto; line-height: 1.15; }
+        .live-price { font-weight: 800; font-size: 12px; color: #fff; letter-spacing: 0.4px; }
+        .live-time { font-size: 9px; color: #d1d5db; display: flex; gap: 4px; align-items: center; }
+        .candle-countdown { color: #eab308; font-weight: 700; }
+        .chart-container { flex: 1; position: relative; height: 100%; width: 100%; display: block; overflow: hidden; }
+        a[href*="tradingview.com"], #tv-attr-logo, .tv-lightweight-charts-watermark { display: none !important; }
+        #tv-left-bar { width: 42px; background: #131722; border-right: 1px solid #2a2e39; display: flex; flex-direction: column; align-items: center; padding: 6px 0; gap: 3px; user-select: none; z-index: 25; flex-shrink: 0; transition: width 0.15s ease, opacity 0.15s ease; }
+        #tv-left-bar.collapsed { width: 0; padding: 0; border: none; overflow: hidden; opacity: 0; }
+        .tv-tool-btn { width: 32px; height: 32px; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #b2b5be; cursor: pointer; position: relative; transition: all 0.12s; }
+        .tv-tool-btn:hover { background: #2a2e39; color: #fff; }
+        .tv-tool-btn.active { background: #2962ff22; color: #2962ff; }
+        .tv-sep { width: 22px; height: 1px; background: #2a2e39; margin: 3px 0; }
+        #tv-bar-toggle { position: absolute; left: 42px; bottom: 14px; z-index: 30; width: 16px; height: 34px; background: #1e222d; border: 1px solid #2a2e39; border-left: none; border-radius: 0 5px 5px 0; color: #9ca3af; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 10px; }
+        #tv-bar-toggle.collapsed { left: 0; background: #2962ff; color: #fff; }
+        .draw-canvas { position: absolute; inset: 0; z-index: 15; pointer-events: none; }
+        #tv-fav-bar { position: fixed; top: 62px; left: 260px; z-index: 46; background: #1e222d; border: 1px solid #2a2e39; border-radius: 6px; padding: 3px 6px; display: none; align-items: center; gap: 2px; box-shadow: 0 8px 22px rgba(0,0,0,0.65); user-select: none; }
+        .tv-fav-item { width: 30px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #b2b5be; cursor: pointer; background: transparent; border: none; transition: all 0.12s; }
+        .tv-fav-item:hover { background: #2a2e39; color: #fff; }
+        .tv-fav-item.active { background: #2962ff22; color: #2962ff; }
+        #tv-float-bar { position: fixed; z-index: 45; background: #1e222d; border: 1px solid #2a2e39; border-radius: 6px; padding: 4px 6px; display: none; align-items: center; gap: 4px; box-shadow: 0 8px 20px rgba(0,0,0,0.6); user-select: none; }
+        .tv-fb-btn { height: 26px; padding: 0 7px; border-radius: 4px; display: flex; align-items: center; gap: 4px; font-size: 11px; color: #d1d4dc; cursor: pointer; background: transparent; border: none; }
+        .tv-fb-btn:hover { background: #2a2e39; color: #fff; }
+        .tv-pop-menu { position: fixed; z-index: 48; background: #1e222d; border: 1px solid #2a2e39; border-radius: 6px; padding: 4px; display: none; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.7); min-width: 150px; font-size: 11px; }
+        .tv-pop-item { padding: 6px 10px; border-radius: 4px; color: #d1d4dc; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .tv-pop-item:hover { background: #2a2e39; color: #fff; }
+        #tv-proj-pop, #tv-patterns-pop, #tv-shapes-pop, #tv-fib-pop, #tv-lines-pop { position: fixed; left: 44px; z-index: 49; background: #1e222d; border: 1px solid #2a2e39; border-radius: 6px; width: 245px; padding: 6px 0; display: none; flex-direction: column; box-shadow: 0 12px 28px rgba(0,0,0,0.75); user-select: none; max-height: 82vh; overflow-y: auto; }
+        #tv-lines-pop { top: 88px; width: 235px; } #tv-fib-pop { top: 122px; } #tv-shapes-pop { top: 156px; } #tv-patterns-pop { top: 190px; } #tv-proj-pop { top: 224px; width: 255px; }
+        .tv-menu-sec { padding: 5px 14px 3px; font-size: 10px; font-weight: 700; color: #787b86; letter-spacing: 0.6px; text-transform: uppercase; }
+        .tv-line-row { padding: 6px 12px; display: flex; align-items: center; justify-content: space-between; color: #d1d4dc; font-size: 12px; cursor: pointer; transition: background 0.1s; }
+        .tv-line-row:hover, .tv-line-row.active { background: #2a2e39; color: #fff; }
+        .tv-line-left { display: flex; align-items: center; gap: 10px; }
+        .tv-line-right { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #787b86; }
+        .tv-line-star { color: #50535e; font-size: 13px; cursor: pointer; line-height: 1; }
+        .tv-line-star.starred { color: #f59e0b; }
+        .tv-line-star:hover { color: #fbbf24; }
+    </style>
+</head>
+<body>
+    <header class="h-[52px] bg-[#111827] border-b border-gray-800 px-4 flex items-center justify-between flex-shrink-0 z-30">
+        <div class="flex items-center gap-5">
+            <div class="flex items-center gap-2.5 cursor-pointer" onclick="switchView('charts')">
+                <div class="w-8 h-8 rounded-lg bg-yellow-500 flex items-center justify-center text-gray-950 font-black text-base shadow">SP</div>
+                <div>
+                    <div class="text-white font-bold text-sm tracking-wide leading-none flex items-center gap-1.5">SP BOT PRO <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span></div>
+                    <div class="text-[10px] text-gray-400">Turbo Fyers Terminal • Zero Flicker</div>
+                </div>
+            </div>
+            <nav class="hidden md:flex items-center gap-1 bg-[#0b0f19] p-1 rounded-lg border border-gray-800">
+                <button id="nav-charts" onclick="switchView('charts')" class="px-3 py-1.5 rounded-md text-xs font-semibold bg-yellow-500 text-gray-950">📊 Live Charts</button>
+                <button id="nav-screener" onclick="switchView('screener')" class="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-300 hover:text-white">⚡ Screener & Options</button>
+                <button id="nav-watchlist" onclick="switchView('watchlist')" class="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-300 hover:text-white flex items-center gap-1">⭐ Watchlist & Alerts <span id="alert-count-badge" class="px-1.5 py-0.2 bg-red-500/20 text-red-400 rounded text-[10px]">0</span></button>
+                <button id="nav-paper" onclick="switchView('paper')" class="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-300 hover:text-white">🧪 Paper Trading</button>
+            </nav>
+        </div>
+        <div class="hidden xl:flex items-center gap-2 text-xs">
+            <div class="px-2.5 py-1 rounded-md bg-[#0b0f19] border border-gray-800 flex items-center gap-1.5"><span class="text-gray-400">Tracked:</span><span id="sum-total" class="text-white font-bold">0</span></div>
+            <div class="px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1.5"><span class="text-emerald-400">BUY🟢:</span><span id="sum-buy" class="text-emerald-300 font-bold">0</span></div>
+            <div class="px-2.5 py-1 rounded-md bg-red-500/10 border border-red-500/20 flex items-center gap-1.5"><span class="text-red-400">SELL🔴:</span><span id="sum-sell" class="text-red-300 font-bold">0</span></div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="openSearchModal()" class="flex items-center gap-2.5 bg-[#0b0f19] hover:bg-gray-900 border border-gray-700 hover:border-yellow-500/60 px-3 py-1.5 rounded-lg text-xs text-gray-200">
+                <span>🔍 Search...</span><kbd class="px-1.5 py-0.5 text-[10px] bg-gray-800 text-yellow-400 rounded border border-gray-700 font-mono">Ctrl K</kbd>
+            </button>
+            <button id="sync-xhair-btn" onclick="toggleCrosshairSync()" class="px-2.5 py-1.5 rounded-lg bg-blue-600/20 border border-blue-500/40 text-xs text-blue-400 font-semibold" title="Multi-Chart Crosshair Time Sync">🎯 Sync</button>
+            <button onclick="openStrategyModal()" class="px-2.5 py-1.5 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 border border-yellow-500/40 text-xs text-yellow-400 font-semibold flex items-center gap-1" title="Customize ATR Multiplier, Period & Alert Gap">⚙️ Strategy <span id="hdr-strat-badge" class="text-[10px] text-gray-300 font-mono">(1.75|2.0)</span></button>
+            <button onclick="toggleNotifDrawer()" class="px-2.5 py-1.5 rounded-lg bg-[#0b0f19] hover:bg-gray-800 border border-gray-800 text-xs text-white font-semibold flex items-center gap-1 relative" title="Saved Pre-Signals & Breakout Notifications">🔔 Alerts <span id="notif-unread-badge" class="px-1.5 py-0.2 bg-red-500 text-white rounded-full text-[10px] font-bold">0</span></button>
+            <div id="layout-control-wrap" class="flex items-center gap-1.5 bg-[#0b0f19] border border-gray-800 px-2.5 py-1 rounded-lg text-xs">
+                <span class="text-gray-400 hidden sm:inline">Grid:</span>
+                <select id="grid-selector" onchange="changeLayout(this.value)" class="bg-transparent text-white font-semibold focus:outline-none cursor-pointer">
+                    <option value="1" class="bg-gray-900">1 Chart</option><option value="2" class="bg-gray-900">2 Charts</option>
+                    <option value="4" class="bg-gray-900" selected>4 Charts</option><option value="6" class="bg-gray-900">6 Charts</option><option value="8" class="bg-gray-900">8 Charts</option>
+                </select>
+            </div>
+            <button onclick="toggleSidebar()" id="sidebar-toggle-btn" class="px-2.5 py-1.5 rounded-lg bg-[#0b0f19] hover:bg-gray-800 border border-gray-800 text-xs text-yellow-400 font-semibold">📋 Panel</button>
+        </div>
+    </header>
+
+    <datalist id="symbol-suggestions"></datalist>
+
+    <div id="view-charts" class="flex-1 flex min-h-0 overflow-hidden relative">
+        <div id="tv-left-bar">
+            <button id="btn-lines-group" class="tv-tool-btn" data-tool="trendline" onclick="openLinesMenu(event)" title="Trend Line Tools"><svg id="btn-lines-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="20" y2="4"/><circle cx="4" cy="20" r="2.5" fill="#131722"/><circle cx="20" cy="4" r="2.5" fill="#131722"/></svg></button>
+            <button id="btn-fib-group" class="tv-tool-btn" data-tool="fib" onclick="openFibMenu(event)" title="Fibonacci Tools (Alt+F)"><svg id="btn-fib-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="3" y1="4" x2="21" y2="4"/><line x1="3" y1="9" x2="18" y2="9"/><circle cx="19.5" cy="9" r="2.2" fill="#131722"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="6" y1="19" x2="21" y2="19"/><circle cx="4.5" cy="19" r="2.2" fill="#131722"/></svg></button>
+            <button id="btn-shapes-group" class="tv-tool-btn" data-tool="rect" onclick="openShapesMenu(event)" title="Shapes & Arrows (Alt+Shift+R)"><svg id="btn-shapes-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="1" fill="currentColor" fill-opacity="0.18"/></svg></button>
+            <button id="btn-patterns-group" class="tv-tool-btn" data-tool="xabcd" onclick="openPatternsMenu(event)" title="Chart Patterns"><svg id="btn-patterns-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="4,19 8,5 12,12 17,6 20,16"/><line x1="4" y1="19" x2="12" y2="12"/><line x1="12" y1="12" x2="20" y2="16"/><circle cx="4" cy="19" r="2" fill="#131722"/><circle cx="8" cy="5" r="2" fill="#131722"/><circle cx="12" cy="12" r="2" fill="#131722"/><circle cx="17" cy="6" r="2" fill="#131722"/><circle cx="20" cy="16" r="2" fill="#131722"/></svg></button>
+            <button id="btn-proj-group" class="tv-tool-btn" data-tool="long_pos" onclick="openProjMenu(event)" title="Prediction, Projection, Volume & Measurer"><svg id="btn-proj-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="3" y1="6" x2="17" y2="6"/><circle cx="19" cy="6" r="2" fill="#131722"/><line x1="3" y1="12" x2="14" y2="12" stroke-dasharray="2 2"/><circle cx="16" cy="12" r="2" fill="#131722"/><line x1="6" y1="18" x2="21" y2="18"/><circle cx="4" cy="18" r="2" fill="#131722"/></svg></button>
+            <button class="tv-tool-btn" data-tool="brush" onclick="selectDrawTool('brush')" title="Freehand Brush"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 3a3 3 0 0 1 3 3L8 19l-5 1 1-5Z"/></svg></button>
+            <button class="tv-tool-btn" data-tool="text" onclick="selectDrawTool('text')" title="Text Note"><span class="font-serif font-bold text-sm">T</span></button>
+            <div class="tv-sep"></div>
+            <button id="btn-magnet-mode" class="tv-tool-btn" onclick="toggleMagnetMode()" title="Magnet Mode: Snap Drawings to OHLC Candle High/Low (Alt+M)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 15v-6a6 6 0 1 1 12 0v6"/><path d="M6 15h4v4H6z"/><path d="M14 15h4v4h-4z"/></svg>
+            </button>
+            <button id="btn-trash-menu" class="tv-tool-btn hover:text-red-400" onclick="openDeleteMenu(event)" title="Delete Options"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            <div class="mt-auto"></div>
+            <button id="btn-fav-bar-toggle" class="tv-tool-btn" onclick="toggleFavDrawBar()" title="Show / Hide Favorite Drawing Tools Toolbar"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>
+        </div>
+        <button id="tv-bar-toggle" onclick="toggleLeftDrawBar()" title="Hide / Show Drawing Toolbar">‹</button>
+        <div id="chart-grid" class="layout-4"></div>
+        <aside id="right-sidebar" class="w-80 bg-[#111827] border-l border-gray-800 flex flex-col flex-shrink-0">
+            <div class="p-3 border-b border-gray-800 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-white uppercase tracking-wider">⚡ Live SP Signals</span>
+                    <span id="active-pane-indicator" class="text-[10px] px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 font-semibold">Target: Pane #1</span>
+                </div>
+                <div class="flex gap-1 text-[11px]">
+                    <select id="sidebar-cat-filter" onchange="renderSidebarList(true)" class="flex-1 bg-[#0b0f19] border border-gray-800 rounded px-2 py-1 text-gray-200 focus:outline-none focus:border-yellow-500">
+                        <option value="ALL">All Categories</option><option value="STARRED">⭐ Starred Watchlist</option>
+                        <option value="NIFTY50">NIFTY 50</option><option value="BANKNIFTY">BANKNIFTY</option><option value="SENSEX">SENSEX</option>
+                        <option value="OPT_NIFTY">NIFTY OPTIONS</option><option value="OPT_BANKNIFTY">BANKNIFTY OPTIONS</option><option value="OPT_SENSEX">SENSEX OPTIONS</option>
+                        <option value="OPT_HOLD_POSITIONS">HOLD POSITIONS</option><option value="MIDCAP">MIDCAP</option><option value="FINNIFTY">FINNIFTY</option><option value="COMMODITY">COMMODITY</option>
+                    </select>
+                    <select id="sidebar-sig-filter" onchange="renderSidebarList(true)" class="bg-[#0b0f19] border border-gray-800 rounded px-2 py-1 text-gray-200 focus:outline-none focus:border-yellow-500">
+                        <option value="ALL">All</option><option value="BUY">BUY🟢</option><option value="SELL">SELL🔴</option><option value="ALERT">🚨 Gap/Brk</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-3 gap-1.5 pt-0.5 text-[11px]">
+                    <div class="px-2 py-1 rounded bg-[#0b0f19] border border-gray-800 flex items-center justify-between"><span class="text-gray-400">Tracked:</span><span id="sb-sum-total" class="text-white font-bold">0</span></div>
+                    <div class="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between"><span class="text-emerald-400">BUY🟢:</span><span id="sb-sum-buy" class="text-emerald-300 font-bold">0</span></div>
+                    <div class="px-2 py-1 rounded bg-red-500/10 border border-red-500/20 flex items-center justify-between"><span class="text-red-400">SELL🔴:</span><span id="sb-sum-sell" class="text-red-300 font-bold">0</span></div>
+                </div>
+            </div>
+            <div id="sidebar-list" class="flex-1 overflow-y-auto p-1.5 space-y-1"></div>
+        </aside>
+    </div>
+
+    <div id="view-screener" class="flex-1 hidden overflow-y-auto p-4 space-y-6 bg-[#0b0f19]">
+        <div class="bg-[#111827] border border-gray-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+            <div id="screener-cat-bar" class="flex flex-wrap items-center gap-2"></div>
+            <div class="text-xs text-gray-400">💡 <span class="text-gray-200">Tip   :</span>     </div>
+        </div>
+        <div id="screener-tables-container" class="space-y-6"></div>
+    </div>
+
+    <div id="view-paper" class="flex-1 hidden min-h-0 overflow-y-auto p-4 space-y-4 bg-[#0b0f19]">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 class="text-lg font-bold text-white">🧪 Options Paper Trading</h2>
+                <p id="paper-status" class="text-xs text-gray-400">Waiting for live option signals…</p>
+            </div>
+            <span class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-300">SIMULATION ONLY · 1 contract unit · No real orders</span>
+        </div>
+        <p class="rounded-lg border border-gray-800 bg-[#111827] p-3 text-xs leading-relaxed text-gray-400">
+            BUY opens a paper long; a new SELL closes it and opens a paper short. Positions close on an opposite signal or at 3:30 PM IST using the latest observed option price.
+            Trades start only after a new signal change is observed; existing signals are not backfilled. P&amp;L is gross and excludes brokerage, taxes, slippage, and lot multipliers.
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
+            <div class="rounded-xl border border-gray-800 bg-[#111827] p-4"><div class="text-xs text-gray-400">Overall · Net P&amp;L</div><div id="paper-total-net" class="mt-2 text-xl font-bold text-white">₹0.00</div></div>
+            <div class="rounded-xl border border-gray-800 bg-[#111827] p-4"><div class="text-xs text-gray-400">This month · Net P&amp;L</div><div id="paper-month-net" class="mt-2 text-xl font-bold text-white">₹0.00</div></div>
+            <div class="rounded-xl border border-gray-800 bg-[#111827] p-4"><div class="text-xs text-gray-400">This month · Realized</div><div id="paper-month-realized" class="mt-2 text-xl font-bold text-white">₹0.00</div></div>
+            <div class="rounded-xl border border-gray-800 bg-[#111827] p-4"><div class="text-xs text-gray-400">Open P&amp;L</div><div id="paper-open-pnl" class="mt-2 text-xl font-bold text-white">₹0.00</div></div>
+            <div class="rounded-xl border border-gray-800 bg-[#111827] p-4"><div class="text-xs text-gray-400">Today · Net P&amp;L</div><div id="paper-today-net" class="mt-2 text-xl font-bold text-white">₹0.00</div></div>
+            <div class="rounded-xl border border-gray-800 bg-[#111827] p-4"><div class="text-xs text-gray-400">Open / Closed trades</div><div id="paper-trade-count" class="mt-2 text-xl font-bold text-white">0 / 0</div></div>
+        </div>
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <section class="rounded-xl border border-gray-800 bg-[#111827] p-4">
+                <h3 class="mb-3 text-sm font-bold text-white">This Month · Day-wise</h3>
+                <div id="paper-daily-table" class="overflow-x-auto"></div>
+            </section>
+            <section class="rounded-xl border border-gray-800 bg-[#111827] p-4">
+                <h3 class="mb-3 text-sm font-bold text-white">This Month · Week-wise</h3>
+                <div id="paper-weekly-table" class="overflow-x-auto"></div>
+            </section>
+        </div>
+        <section class="rounded-xl border border-gray-800 bg-[#111827] p-4">
+            <h3 class="mb-3 text-sm font-bold text-white">Live Open Positions</h3>
+            <div id="paper-open-table" class="overflow-x-auto"></div>
+        </section>
+        <section class="rounded-xl border border-gray-800 bg-[#111827] p-4">
+            <h3 class="mb-3 text-sm font-bold text-white">Recent Paper Trades</h3>
+            <div id="paper-trades-table" class="overflow-x-auto"></div>
+        </section>
+    </div>
+
+    <div id="view-watchlist" class="flex-1 hidden overflow-y-auto p-4 space-y-6 bg-[#0b0f19]">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-[#111827] border border-gray-800 rounded-xl p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-gray-800">
+                    <div><h3 class="text-base font-bold text-white">⭐ My Starred Watchlist</h3><p class="text-xs text-gray-400">Search modal (Ctrl+K) ya Screener mein ⭐ daba kar stocks add karein</p></div>
+                    <div class="flex items-center gap-2"><div id="wl-star-pills" class="flex items-center gap-1.5 text-xs"></div><button onclick="openSearchModal()" class="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-gray-950 font-bold text-xs rounded-lg">+ Add Stock</button></div>
+                </div>
+                <div id="watchlist-starred-table" class="overflow-x-auto"></div>
+            </div>
+            <div class="bg-[#111827] border border-gray-800 rounded-xl p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-gray-800">
+                    <div><h3 class="text-base font-bold text-white">🚨 Live Radar: Tight Signal Gap & Breakouts</h3><p class="text-xs text-gray-400">Stocks jahan Signal_Gap ≤ 5.50 hai ya BREAK UP / BREAK DOWN trigger hua hai</p></div>
+                    <div id="wl-radar-pills" class="flex items-center gap-1.5 text-xs"></div>
+                </div>
+                <div id="watchlist-radar-table" class="overflow-x-auto"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="search-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm hidden items-start justify-center pt-16 z-50">
+        <div class="bg-[#111827] border border-gray-700 w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden">
+            <div class="p-3.5 border-b border-gray-800 flex items-center gap-3 bg-[#161f30]">
+                <span class="text-yellow-400 text-base">🔍</span>
+                <input id="cmd-search-input" type="text" placeholder="Search symbol, option strike, or category (e.g. SENSEX, RELIANCE, BAJFINANCE)..." class="w-full bg-transparent text-white text-sm focus:outline-none" oninput="renderSearchModalResults()" spellcheck="false" autocomplete="off" />
+                <button onclick="closeSearchModal()" class="px-2 py-0.5 text-xs bg-gray-800 text-gray-300 rounded hover:text-white">ESC</button>
+            </div>
+            <div class="px-4 py-2 bg-[#0b0f19] border-b border-gray-800 flex items-center justify-between text-[11px] text-gray-400">
+                <span id="cmd-result-count">Showing popular symbols</span>
+                <span>Click row to load in <strong id="cmd-target-pane" class="text-yellow-400">Pane #1</strong> • Click ⭐ to save</span>
+            </div>
+            <ul id="cmd-search-list" class="max-h-96 overflow-y-auto divide-y divide-gray-800/60"></ul>
+        </div>
+    </div>
+
+    <div id="interval-modal" onclick="if(event.target === this) closeIntervalModal()" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+        <div class="bg-[#1e222d] border border-[#2a2e39] rounded-lg shadow-2xl px-7 py-5 w-[270px] flex flex-col items-center select-none">
+            <div class="flex items-center gap-1.5 text-[13px] font-medium text-gray-200 mb-3.5"><span>Change Interval</span><span class="text-gray-400 text-xs cursor-help" title="Type number for minutes or add H / D / W (e.g. 1H, 2H, 1D, 1W)">ⓘ</span></div>
+            <input id="interval-input" type="text" maxlength="6" class="w-36 h-9 bg-[#131722] border-2 border-[#2962ff] rounded text-center text-white font-semibold text-sm focus:outline-none" oninput="onIntervalInputChange()" spellcheck="false" autocomplete="off" />
+            <div id="interval-preview" class="mt-2.5 text-[11px] text-gray-400 font-medium h-4">5 minutes</div>
+        </div>
+    </div>
+
+    <div id="tv-fav-bar"><span id="tv-fav-drag" class="text-gray-500 cursor-move px-1 text-xs select-none" title="Drag Favorites Bar">⋮⋮</span><div id="tv-fav-list" class="flex items-center gap-1"></div></div>
+
+    <div id="tv-float-bar">
+        <span class="text-gray-500 cursor-move px-1" id="tv-fb-drag">⋮⋮</span>
+        <button class="tv-fb-btn" onclick="openTemplatePop(event)" title="Drawing Templates">📋 ▾</button>
+        <label class="tv-fb-btn cursor-pointer" title="Line / Border Color"><span>✏️</span><input type="color" id="fb-stroke-col" class="w-4 h-4 bg-transparent border-0 cursor-pointer p-0" onchange="updateSelectedDrawingProp('color', this.value)"></label>
+        <label id="fb-fill-wrap" class="tv-fb-btn cursor-pointer" title="Background Fill Color"><span>🪣</span><input type="color" id="fb-fill-col" class="w-4 h-4 bg-transparent border-0 cursor-pointer p-0" onchange="updateSelectedDrawingProp('fillColor', this.value)"></label>
+        <button class="tv-fb-btn" onclick="openWidthPop(event)" id="fb-width-btn" title="Line Width">2px</button>
+        <button class="tv-fb-btn" onclick="openStylePop(event)" id="fb-style-btn" title="Line Style">───</button>
+        <button class="tv-fb-btn" onclick="openDrawSettingsModal()" title="Settings">⚙️</button>
+        <button class="tv-fb-btn" id="fb-lock-btn" onclick="toggleSelectedLock()" title="Lock/Unlock">🔓</button>
+        <button class="tv-fb-btn hover:text-red-400" onclick="deleteSelectedDrawing()" title="Remove (Del)">🗑️</button>
+    </div>
+
+    <div id="tv-lines-pop"></div><div id="tv-fib-pop"></div><div id="tv-shapes-pop"></div><div id="tv-patterns-pop"></div><div id="tv-proj-pop"></div>
+    <div id="tv-width-pop" class="tv-pop-menu"></div>
+    <div id="tv-style-pop" class="tv-pop-menu"></div>
+    <div id="tv-tpl-pop" class="tv-pop-menu"></div>
+    <div id="tv-del-pop" class="tv-pop-menu" style="min-width:240px;"></div>
+
+    <div id="draw-settings-modal" onclick="if(event.target===this) closeDrawSettingsModal()" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-[#1e222d] border border-[#2a2e39] rounded-lg shadow-2xl w-[430px] text-xs text-gray-200 overflow-hidden select-none">
+            <div class="px-4 py-3 border-b border-[#2a2e39] flex items-center justify-between">
+                <div class="flex items-center gap-2"><span id="dsm-title" class="font-bold text-sm text-white">Fib Retracement</span><span class="text-gray-400 text-xs">✎</span></div>
+                <button onclick="closeDrawSettingsModal()" class="text-gray-400 hover:text-white text-sm">✕</button>
+            </div>
+            <div class="flex border-b border-[#2a2e39] px-4 gap-5 text-xs font-semibold bg-[#181c26]">
+                <button onclick="switchDsmTab('style')" id="dsm-tab-style" class="py-2.5 border-b-2 border-white text-white">Style</button>
+                <button onclick="switchDsmTab('text')" id="dsm-tab-text" class="py-2.5 border-b-2 border-transparent text-gray-400 hover:text-white">Text</button>
+                <button onclick="switchDsmTab('coord')" id="dsm-tab-coord" class="py-2.5 border-b-2 border-transparent text-gray-400 hover:text-white">Coordinates</button>
+                <button onclick="switchDsmTab('vis')" id="dsm-tab-vis" class="py-2.5 border-b-2 border-transparent text-gray-400 hover:text-white">Visibility</button>
+            </div>
+            <div class="p-4 max-h-[420px] overflow-y-auto space-y-3">
+                <div id="dsm-body-style-reg" class="space-y-2.5">
+                    <div class="flex items-center justify-between"><span>Line</span><div class="flex items-center gap-2"><input type="color" id="dsm-color" class="w-6 h-6 bg-transparent border-0 cursor-pointer"><select id="dsm-width" class="bg-[#131722] border border-gray-700 rounded px-2 py-1"><option value="1">1px</option><option value="2">2px</option><option value="3">3px</option><option value="4">4px</option></select><select id="dsm-dash" class="bg-[#131722] border border-gray-700 rounded px-2 py-1"><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option></select></div></div>
+                    <div class="flex items-center justify-between"><span>Background Fill & Opacity</span><div class="flex items-center gap-2"><input type="color" id="dsm-fill" class="w-6 h-6 bg-transparent border-0 cursor-pointer"><input type="range" id="dsm-opacity" min="0.05" max="0.8" step="0.05" class="w-24"></div></div>
+                    <div id="dsm-reg-checks" class="grid grid-cols-2 gap-2 pt-1"></div>
+                </div>
+                <div id="dsm-body-style-fib" class="hidden space-y-3">
+                    <div class="flex items-center justify-between"><label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="fib-show-tl" checked> Trend line</label><div class="flex items-center gap-2"><input type="color" id="fib-tl-color" value="#787b86" class="w-6 h-6 bg-transparent border-0 cursor-pointer"><select id="fib-tl-dash" class="bg-[#131722] border border-gray-700 rounded px-2 py-1"><option value="dashed" selected>Dashed (---)</option><option value="solid">Solid (───)</option><option value="dotted">Dotted (···)</option></select></div></div>
+                    <div class="flex items-center justify-between"><span>Levels line</span><div class="flex items-center gap-2"><select id="fib-lvl-width" class="bg-[#131722] border border-gray-700 rounded px-2 py-1"><option value="1" selected>1px</option><option value="2">2px</option><option value="3">3px</option></select><select id="fib-lvl-dash" class="bg-[#131722] border border-gray-700 rounded px-2 py-1"><option value="solid" selected>Solid (───)</option><option value="dashed">Dashed (---)</option><option value="dotted">Dotted (···)</option></select></div></div>
+                    <div class="space-y-1.5"><label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="fib-ext-l"> Extend lines left</label><label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="fib-ext-r"> Extend lines right</label></div>
+                    <div id="fib-levels-grid" class="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1 border-t border-[#2a2e39]"></div>
+                    <div class="pt-2 border-t border-[#2a2e39] space-y-2.5">
+                        <div class="flex items-center justify-between"><label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="fib-use-one-col" onchange="onFibUseOneColor(this.checked)"> Use one color</label><input type="color" id="fib-one-col" value="#2962ff" class="w-6 h-6 bg-transparent border-0 cursor-pointer" onchange="onFibOneColorChange(this.value)"></div>
+                        <div class="flex items-center justify-between"><label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="fib-bg-show" checked> Background</label><input type="range" id="fib-bg-opacity" min="0.03" max="0.55" step="0.02" value="0.16" class="w-36 accent-blue-500"></div>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="fib-reverse"> Reverse</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="fib-prices" checked> Prices</label>
+                        <div class="flex items-center justify-between"><label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="fib-levels-show" checked> Levels</label><select id="fib-levels-fmt" class="bg-[#131722] border border-gray-700 rounded px-2 py-1 w-32"><option value="values" selected>Values</option><option value="percent">Percent</option></select></div>
+                        <div class="flex items-center justify-between"><span>Labels</span><div class="flex gap-1.5"><select id="fib-lbl-align" class="bg-[#131722] border border-gray-700 rounded px-2 py-1"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select><select id="fib-lbl-valign" class="bg-[#131722] border border-gray-700 rounded px-2 py-1"><option value="middle" selected>Middle</option><option value="top">Top</option><option value="bottom">Bottom</option></select></div></div>
+                        <div class="flex items-center justify-between"><span>Font size</span><select id="fib-font-size" class="bg-[#131722] border border-gray-700 rounded px-2 py-1 w-24"><option value="10">10</option><option value="11">11</option><option value="12" selected>12</option><option value="14">14</option><option value="16">16</option></select></div>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="fib-log-scale"> Fib levels based on log scale</label>
+                    </div>
+                </div>
+                <div id="dsm-body-text" class="hidden space-y-3">
+                    <div class="flex items-center gap-2"><input type="color" id="dsm-txt-col" value="#ffffff" class="w-6 h-6 bg-transparent border-0"><select id="dsm-txt-size" class="bg-[#131722] border border-gray-700 rounded px-2 py-1"><option value="11">11px</option><option value="12" selected>12px</option><option value="14">14px</option><option value="16">16px</option><option value="20">20px</option></select><label class="flex items-center gap-1 px-2 py-1 bg-[#131722] rounded border border-gray-700 cursor-pointer"><input type="checkbox" id="dsm-txt-b"> <b>B</b></label></div>
+                    <textarea id="dsm-txt-val" rows="3" placeholder="Add custom text..." class="w-full bg-[#131722] border border-gray-700 rounded p-2 text-white focus:outline-none focus:border-blue-500"></textarea>
+                    <div class="flex items-center justify-between"><span>Text Alignment</span><select id="dsm-txt-align" class="bg-[#131722] border border-gray-700 rounded px-2 py-1"><option value="center">Middle / Center</option><option value="left">Top / Left</option><option value="right">Bottom / Right</option></select></div>
+                </div>
+                <div id="dsm-body-coord" class="hidden space-y-3"></div>
+                <div id="dsm-body-vis" class="hidden space-y-2.5"></div>
+            </div>
+            <div class="px-4 py-3 border-t border-[#2a2e39] flex items-center justify-between bg-[#181c26]">
+                <button onclick="saveCurrentAsDefaultTemplate()" class="px-2.5 py-1 rounded border border-gray-600 text-gray-300 hover:text-white">Template ▾</button>
+                <div class="flex gap-2"><button onclick="closeDrawSettingsModal()" class="px-3 py-1 rounded border border-gray-600 text-gray-300 hover:text-white">Cancel</button><button onclick="applyDrawSettingsModal()" class="px-4 py-1 rounded bg-white text-gray-950 font-bold hover:bg-gray-200">Ok</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="strategy-modal" onclick="if(event.target===this) toggleFlexModal('strategy-modal',false)" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-[#111827] border border-gray-700 rounded-xl shadow-2xl w-[360px] overflow-hidden text-xs">
+            <div class="px-4 py-3 bg-[#161f30] border-b border-gray-800 flex items-center justify-between">
+                <span class="font-bold text-sm text-yellow-400">⚙️ Strategy & Alert Settings</span>
+                <button onclick="toggleFlexModal('strategy-modal',false)" class="text-gray-400 hover:text-white text-sm">✕</button>
+            </div>
+            <div class="p-4 space-y-3 text-gray-200">
+                <div class="flex items-center justify-between"><span>ATR / TRL Multiplier</span><input id="inp-atr-mult" type="number" step="0.05" min="0.1" max="20" value="1.75" class="w-24 bg-[#0b0f19] border border-gray-700 focus:border-yellow-500 rounded px-2 py-1 text-right text-white font-bold outline-none"></div>
+                <div class="flex items-center justify-between"><span>ATR Period (RMA)</span><input id="inp-atr-period" type="number" step="0.5" min="0.5" max="100" value="2.0" class="w-24 bg-[#0b0f19] border border-gray-700 focus:border-yellow-500 rounded px-2 py-1 text-right text-white font-bold outline-none"></div>
+                <div class="flex items-center justify-between border-t border-gray-800 pt-2.5"><span class="text-emerald-400 font-semibold">Pre-Alert Signal Gap (🚨)</span><input id="inp-alert-gap" type="number" step="0.5" min="0.5" max="100" value="5.50" class="w-24 bg-[#0b0f19] border border-gray-700 focus:border-yellow-500 rounded px-2 py-1 text-right text-white font-bold outline-none"></div>
+                <div class="border-t border-gray-800 pt-2.5 space-y-2">
+                    <label class="flex items-center justify-between cursor-pointer"><span>🔊 Sound Beep on Alert</span><input type="checkbox" id="chk-notif-sound" checked class="accent-yellow-500"></label>
+                    <label class="flex items-center justify-between cursor-pointer"><span>🚀 Pre-Signal (Breakout / Tight Gap)</span><input type="checkbox" id="chk-notif-pre" checked class="accent-yellow-500"></label>
+                    <label class="flex items-center justify-between cursor-pointer"><span>🟢/🔴 Confirmed BUY/SELL Alert</span><input type="checkbox" id="chk-notif-sig" checked class="accent-yellow-500"></label>
+                    <label class="flex items-center justify-between cursor-pointer"><span>⭐ Only Starred Watchlist Stocks</span><input type="checkbox" id="chk-notif-star" class="accent-yellow-500"></label>
+                </div>
+            </div>
+            <div class="px-4 py-2.5 bg-[#161f30] border-t border-gray-800 flex justify-end gap-2">
+                <button onclick="toggleFlexModal('strategy-modal',false)" class="px-3 py-1 rounded border border-gray-700 text-gray-300">Cancel</button>
+                <button onclick="saveStrategySettings()" class="px-4 py-1 rounded bg-yellow-500 hover:bg-yellow-400 text-gray-950 font-bold">Apply Live</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notif-drawer" class="fixed top-[52px] right-0 bottom-0 w-[340px] bg-[#111827] border-l border-gray-800 shadow-2xl transform translate-x-full transition-transform duration-200 z-40 flex flex-col">
+        <div class="p-3 bg-[#161f30] border-b border-gray-800 flex items-center justify-between">
+            <span class="text-xs font-bold text-white">🔔 Notifications</span>
+            <div class="flex items-center gap-2">
+                <button onclick="clearSavedNotifications()" class="px-2 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px] font-semibold hover:bg-red-500/30">Clear Current Tab</button>
+                <button onclick="toggleNotifDrawer()" class="text-gray-400 hover:text-white text-sm">✕</button>
+            </div>
+        </div>
+
+        <!-- QUICK SETTINGS TOGGLES -->
+        <div class="px-3 py-2 bg-[#0b0f19] border-b border-gray-800 flex justify-between gap-2 text-[10px]">
+            <label class="flex items-center gap-1 cursor-pointer text-gray-300 hover:text-white">
+                <input type="checkbox" id="drw-chk-pre" onchange="toggleQuickSetting('pre_on', this.checked)" class="accent-yellow-500"> Ready Alert
+            </label>
+            <label class="flex items-center gap-1 cursor-pointer text-gray-300 hover:text-white">
+                <input type="checkbox" id="drw-chk-sig" onchange="toggleQuickSetting('sig_on', this.checked)" class="accent-emerald-500"> Executed Alert
+            </label>
+            <label class="flex items-center gap-1 cursor-pointer text-gray-300 hover:text-white">
+                <input type="checkbox" id="drw-chk-snd" onchange="toggleQuickSetting('sound_on', this.checked)" class="accent-blue-500"> Sound
+            </label>
+        </div>
+
+        <!-- TABS -->
+        <div class="flex border-b border-gray-800 bg-[#161f30] text-xs font-semibold">
+            <button id="tab-notif-pre" onclick="switchNotifTab('PRE')" class="flex-1 py-2 text-center text-yellow-400 border-b-2 border-yellow-400">⏳ Ready (PRE)</button>
+            <button id="tab-notif-exec" onclick="switchNotifTab('EXEC')" class="flex-1 py-2 text-center text-gray-400 border-b-2 border-transparent hover:text-gray-200">✅ Executed</button>
+        </div>
+
+        <div id="notif-history-list" class="flex-1 overflow-y-auto p-2 space-y-1.5"></div>
+    </div>
+
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-xs pointer-events-none"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
